@@ -1,0 +1,100 @@
+@startuml
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+Person(user_web, "Пользователь", "Веб-приложение")
+Person(user_mobile, "Пользователь", "Мобильное приложение")
+Person(user_tv, "Пользователь", "Смарт-ТВ")
+Person(admin, "Тех. поддержка", "Администратор")
+
+System_Boundary(video_platform, "Кинобездна - Стриминговый сервис") {
+Container(api_gateway, "API Gateway", "Gateway", "Рейт-лимитинг, авторизация, ограничение по IP")
+
+Container(serp, "SERP", "Сервис", "Поисковая выдача для десктоп приложения")
+Container(mobile_serp, "Mobile SERP", "Сервис", "Поисковая выдача для мобильного приложения")
+ContainerDb(cache_serp, "Cache (SERP)", "RocksDB", "Кэш объектов видео для SERP")
+ContainerDb(cache_mobile_serp, "Cache (Mobile SERP)", "RocksDB", "Кэш объектов видео для Mobile SERP")
+
+Container(users, "Users", "Сервис", "Хранение пользователей и дополнительной информации")
+Container(subs, "Subscriptions", "Сервис", "Управление подписками пользователей")
+Container(payments, "Payments", "Сервис", "Обработка платежей (Saga паттерн с оркестратором)")
+Container(discounts, "Discounts", "Сервис", "Промокоды и скидки")
+
+Container(video, "Video", "Сервис", "Обработка видео из внешних источников, сохранение метаданных")
+Container(video_replica, "Video Replica", "Сервис", "Оптимизированная реплика для чтения")
+Container(video_parser, "Video Parser", "Сервис", "Парсинг новых видео из кинотеатров")
+
+ContainerDb(es_video, "Elasticsearch", "NoSQL", "База для video-replica (поиск и скроллинг лент)")
+ContainerDb(clickhouse_video, "ClickHouse", "OLAP", "База для video (метаданные и рекомендации)")
+ContainerDb(pg_discounts, "PostgreSQL", "РСУБД", "База скидок и промокодов")
+ContainerDb(pg_payments, "PostgreSQL", "РСУБД", "База промежуточного состояния платежей и метаданных")
+
+ContainerQueue(kafka, "Kafka", "Шина событий", "Топики: subscriptions, video-updates, video-replication")
+ContainerQueue(rabbitmq, "RabbitMQ", "Брокер сообщений", "Очереди для системы рекомендаций")
+}
+
+System_Ext(admin_panel, "Админ-панель", "Web Application", "Интерфейс технической поддержки")
+System_Ext(ext_payment, "External Payment System", "Внешняя система", "Провайдер платежей")
+System_Ext(ext_cinemas, "Внешние онлайн-кинотеатры", "Внешние системы", "Источники видео контента")
+System_Ext(recs_system, "Recommendations", "Внешняя система", "Система рекомендаций")
+System_Ext(s3, "S3", "Объектное хранилище", "Хранение видео файлов")
+
+' Связи пользователей и админов
+Rel(user_web, api_gateway, "Использует", "HTTPS")
+Rel(user_mobile, api_gateway, "Использует", "HTTPS")
+Rel(user_tv, api_gateway, "Использует", "HTTPS")
+Rel(admin, admin_panel, "Использует", "HTTPS")
+Rel(admin_panel, api_gateway, "Управление", "HTTPS")
+
+' API Gateway -> Сервисы
+Rel(api_gateway, serp, "Маршрутизация запросов", "HTTP")
+Rel(api_gateway, mobile_serp, "Маршрутизация запросов", "HTTP")
+Rel(api_gateway, users, "Логин/регистрация", "HTTP")
+Rel(api_gateway, subs, "Создание подписки, управление типами подписок", "HTTP")
+Rel(api_gateway, discounts, "Создание промокодов, применение скидок", "HTTP")
+
+' SERP сервисы
+Rel(serp, cache_serp, "Чтение/запись кэша", "RocksDB API")
+Rel(mobile_serp, cache_mobile_serp, "Чтение/запись кэша", "RocksDB API")
+Rel(serp, subs, "Проверка доступных подписок пользователя", "HTTP")
+Rel(mobile_serp, subs, "Проверка доступных подписок пользователя", "HTTP")
+Rel(serp, video_replica, "Поиск видео (если нет в кэше)", "HTTP")
+Rel(mobile_serp, video_replica, "Поиск видео (если нет в кэше)", "HTTP")
+
+' Subscriptions -> Payments через Kafka
+Rel(subs, kafka, "Публикует события создания подписки", "Kafka")
+Rel(kafka, payments, "Потребляет события подписок", "Kafka")
+
+' Payments
+Rel(payments, ext_payment, "Проведение платежей", "HTTPS")
+Rel(payments, discounts, "Проверка условий скидки", "HTTP")
+Rel(payments, pg_payments, "Сохранение состояния платежа (Saga)", "SQL")
+
+' Discounts
+Rel(discounts, pg_discounts, "CRUD операций", "SQL")
+
+' Video Parser -> Video
+Rel(video_parser, ext_cinemas, "Парсинг новых видео", "HTTP")
+Rel(video_parser, kafka, "Публикует новые видео", "Kafka")
+Rel(kafka, video, "Потребляет события новых видео", "Kafka")
+
+' Video сервис
+Rel(video, clickhouse_video, "Сохранение метаданных видео и рекомендаций", "SQL")
+Rel(video, kafka, "Публикует обновления видео и репликацию данных", "Kafka")
+Rel(video, rabbitmq, "Публикует события новых видео для рекомендаций", "AMQP")
+Rel(video, ext_cinemas, "Получение выгрузок видео", "HTTP")
+Rel(video, s3, "Сохранение видео файлов и ссылок", "S3 API")
+Rel(video, recs_system, "Выгрузка данных о рекомендациях", "HTTP")
+
+' Video Replica
+Rel(kafka, video_replica, "Потребляет обновления видео", "Kafka")
+Rel(video_replica, es_video, "Чтение/запись данных", "Elasticsearch API")
+Rel(video_replica, video, "Запрос видео (если нет в базе)", "HTTP")
+Rel(video_replica, rabbitmq, "Публикует события кликов/лайков для рекомендаций", "AMQP")
+
+' Users -> Recommendations
+Rel(users, rabbitmq, "Публикует события регистрации", "AMQP")
+
+' Recommendations система
+Rel(recs_system, rabbitmq, "Потребляет события", "AMQP")
+Rel(recs_system, video, "Выгружает данные рекомендаций", "HTTP")
+@enduml
