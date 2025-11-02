@@ -80,7 +80,7 @@
 Пройденные тесты:
 [ссылка на скриншот](images/tests_passed.png)
 
-Состояние топиков Kafka:
+Состояние топиков Kafka (по топикам):
 - movie-events
 [ссылка на скриншот](images/movie-events-topic.png)
 - user-events
