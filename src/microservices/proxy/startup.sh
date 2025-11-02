@@ -38,12 +38,32 @@ if [ -z "$MOVIES_MIGRATION_PERCENT" ]; then
   export MOVIES_MIGRATION_PERCENT="0"
 fi
 
-# Преобразуем GRADUAL_MIGRATION в булево значение для Lua
-if [ "$GRADUAL_MIGRATION" = "true" ] || [ "$GRADUAL_MIGRATION" = "1" ]; then
-  GRADUAL_MIGRATION_LUA="true"
-else
-  GRADUAL_MIGRATION_LUA="false"
+# Вычисляем веса для балансировки на основе процента миграции
+# MONOLITH_WEIGHT - вес монолита (обратный процент миграции)
+# MOVIES_WEIGHT - вес микросервиса (процент миграции)
+if [ -z "$MONOLITH_WEIGHT" ]; then
+  MONOLITH_WEIGHT=$((100 - MOVIES_MIGRATION_PERCENT))
+  export MONOLITH_WEIGHT
 fi
+
+if [ -z "$MOVIES_WEIGHT" ]; then
+  MOVIES_WEIGHT=$MOVIES_MIGRATION_PERCENT
+  export MOVIES_WEIGHT
+fi
+
+if [ $GRADUAL_MIGRATION = "false" ]; then
+  MONOLITH_WEIGHT=100
+  MOVIES_WEIGHT=0
+fi
+
+# Извлекаем host:port из URL для targets (Kong требует только host:port без протокола)
+# Удаляем протокол http:// или https:// если есть
+MONOLITH_TARGET=$(echo "$MONOLITH_URL" | sed 's|^https\?://||')
+MOVIES_TARGET=$(echo "$MOVIES_SERVICE_URL" | sed 's|^https\?://||')
+EVENTS_TARGET=$(echo "$EVENTS_SERVICE_URL" | sed 's|^https\?://||')
+export MONOLITH_TARGET
+export MOVIES_TARGET
+export EVENTS_TARGET
 
 # Используем envsubst для подстановки переменных окружения прямо в kong.yml
 # Если envsubst недоступен, используем sed как fallback
@@ -57,7 +77,12 @@ else
           s|\${MOVIES_SERVICE_URL}|${MOVIES_SERVICE_URL}|g; \
           s|\${EVENTS_SERVICE_URL}|${EVENTS_SERVICE_URL}|g; \
           s|\${GRADUAL_MIGRATION}|${GRADUAL_MIGRATION_LUA}|g; \
-          s|\${MOVIES_MIGRATION_PERCENT}|${MOVIES_MIGRATION_PERCENT}|g" \
+          s|\${MOVIES_MIGRATION_PERCENT}|${MOVIES_MIGRATION_PERCENT}|g; \
+          s|\${MONOLITH_WEIGHT}|${MONOLITH_WEIGHT}|g; \
+          s|\${MOVIES_WEIGHT}|${MOVIES_WEIGHT}|g; \
+          s|\${MONOLITH_TARGET}|${MONOLITH_TARGET}|g; \
+          s|\${MOVIES_TARGET}|${MOVIES_TARGET}|g; \
+          s|\${EVENTS_TARGET}|${EVENTS_TARGET}|g" \
     /usr/local/kong/kong.yml
   echo "Substituted variables in kong.yml using sed"
 fi
@@ -68,6 +93,11 @@ echo "  MOVIES_SERVICE_URL=${MOVIES_SERVICE_URL}"
 echo "  EVENTS_SERVICE_URL=${EVENTS_SERVICE_URL}"
 echo "  GRADUAL_MIGRATION=${GRADUAL_MIGRATION} (Lua: ${GRADUAL_MIGRATION_LUA})"
 echo "  MOVIES_MIGRATION_PERCENT=${MOVIES_MIGRATION_PERCENT}"
+echo "  MONOLITH_WEIGHT=${MONOLITH_WEIGHT}"
+echo "  MOVIES_WEIGHT=${MOVIES_WEIGHT}"
+echo "  MONOLITH_TARGET=${MONOLITH_TARGET}"
+echo "  MOVIES_TARGET=${MOVIES_TARGET}"
+echo "  EVENTS_TARGET=${EVENTS_TARGET}"
 
 echo "Startup script completed. Starting Kong..."
 
