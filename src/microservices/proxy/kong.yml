@@ -136,8 +136,6 @@ plugins:
     config:
       access:
         - |
-          -- Feature flag для маршрутизации между монолитом и микросервисом
-          -- Значения подставляются в шаблон при запуске контейнера
           local migration_percent = ${MOVIES_MIGRATION_PERCENT}
           local gradual_migration = ${GRADUAL_MIGRATION}
           
