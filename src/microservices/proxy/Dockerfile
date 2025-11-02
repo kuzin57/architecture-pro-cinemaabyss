@@ -1,4 +1,4 @@
-FROM kong:latest
+FROM kong:3.7.2
 
 # Set working directory
 WORKDIR /usr/local/kong
