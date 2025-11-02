@@ -38,4 +38,4 @@ ENV KONG_ADMIN_LISTEN=0.0.0.0:8001
 
 # Use wrapper entrypoint that runs startup.sh first, then Kong
 ENTRYPOINT ["/docker-entrypoint-wrapper.sh"]
-CMD ["kong", "docker-start"]
+CMD ["kong", "start"]
