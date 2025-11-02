@@ -146,14 +146,15 @@ plugins:
           if gradual_migration and migration_percent > 0 then
             -- Генерируем псевдослучайное число от 1 до 100
             -- Используем комбинацию времени, PID воркера и данных запроса для получения значения
-            local time_ms = math.floor(ngx.now() * 1000)
+            -- Используем ngx.time() вместо ngx.now() чтобы избежать блокирующего sleep
+            local time_sec = ngx.time()
             local worker_pid = ngx.worker.pid() or 0
             local request_id = ngx.var.request_id or ""
             local uri = ngx.var.request_uri or ""
             
             -- Вычисляем хеш-подобное значение для получения равномерно распределенного числа от 1 до 100
             -- Используем простую формулу для генерации псевдослучайного значения
-            local seed = time_ms * 7 + worker_pid * 13 + #request_id * 17 + #uri * 23
+            local seed = time_sec * 7 + worker_pid * 13 + #request_id * 17 + #uri * 23
             local random_value = (seed % 100) + 1
             
             if random_value <= migration_percent then
