@@ -2,29 +2,6 @@ _format_version: "3.0"
 _transform: true
 
 # ==========================================
-# Upstreams для балансировки
-# ==========================================
-
-upstreams:
-  # Upstream для балансировки между монолитом и микросервисом фильмов
-  - name: movies-upstream
-
-# ==========================================
-# Targets для upstream
-# ==========================================
-
-targets:
-  # Target для монолита
-  - upstream: movies-upstream
-    target: ${MONOLITH_TARGET}
-    weight: ${MONOLITH_WEIGHT}
-  
-  # Target для микросервиса фильмов
-  - upstream: movies-upstream
-    target: ${MOVIES_TARGET}
-    weight: ${MOVIES_WEIGHT}
-
-# ==========================================
 # Сервисы
 # ==========================================
 
@@ -74,16 +51,8 @@ services:
           - GET
           - POST
         strip_path: false
-
-  # Сервис фильмов с балансировкой между монолитом и микросервисом
-  - name: movies-balance-service
-    connect_timeout: 60000
-    write_timeout: 60000
-    read_timeout: 60000
-    host: movies-upstream
-    protocol: http
-    routes:
-      # Роут для фильмов с балансировкой
+      
+      # Роут для фильмов (с динамической маршрутизацией через feature flag)
       - name: movies-route
         paths:
           - /api/movies
@@ -92,7 +61,7 @@ services:
           - POST
         strip_path: false
 
-  # Микросервис фильмов (для health check)
+  # Микросервис фильмов
   - name: movies-service
     url: ${MOVIES_SERVICE_URL}
     connect_timeout: 60000
@@ -158,6 +127,85 @@ plugins:
       status_code: 200
       content_type: text/plain
       body: "API Gateway is healthy"
+
+  # Плагин для условной маршрутизации /api/movies на основе feature flag
+  # Использует pre-function для динамической маршрутизации
+  # Значения GRADUAL_MIGRATION и MOVIES_MIGRATION_PERCENT подставляются через startup.sh
+  - name: pre-function
+    route: movies-route
+    config:
+      access:
+        - |
+          -- Feature flag для маршрутизации между монолитом и микросервисом
+          -- Значения подставляются в шаблон при запуске контейнера
+          local migration_percent = ${MOVIES_MIGRATION_PERCENT}
+          local gradual_migration = ${GRADUAL_MIGRATION}
+          
+          local should_route_to_microservice = false
+          
+          if gradual_migration and migration_percent > 0 then
+            -- Генерируем псевдослучайное число от 1 до 100
+            -- Используем комбинацию времени, PID воркера и данных запроса для получения значения
+            local time_ms = math.floor(ngx.now() * 1000)
+            local worker_pid = ngx.worker.pid() or 0
+            local request_id = ngx.var.request_id or ""
+            local uri = ngx.var.request_uri or ""
+            
+            -- Вычисляем хеш-подобное значение для получения равномерно распределенного числа от 1 до 100
+            -- Используем простую формулу для генерации псевдослучайного значения
+            local seed = time_ms * 7 + worker_pid * 13 + #request_id * 17 + #uri * 23
+            local random_value = (seed % 100) + 1
+            
+            if random_value <= migration_percent then
+              -- Процент достигнут - идем в микросервис
+              should_route_to_microservice = true
+              ngx.log(ngx.INFO, "[FEATURE-FLAG] Routing to movies-service (random: " .. random_value .. " <= percent: " .. migration_percent .. ")")
+            else
+              -- Процент не достигнут - идем в монолит
+              ngx.log(ngx.INFO, "[FEATURE-FLAG] Routing to monolith (random: " .. random_value .. " > percent: " .. migration_percent .. ")")
+            end
+          else
+            -- Если миграция выключена или процент 0, всегда идем в монолит
+            ngx.log(ngx.INFO, "[FEATURE-FLAG] Routing to monolith (feature flag disabled or 0%)")
+          end
+          
+          -- Сохраняем решение в контексте
+          ngx.ctx.route_to_microservice = should_route_to_microservice
+      rewrite:
+        - |
+          -- В фазе rewrite меняем upstream если нужно маршрутизировать в микросервис
+          if ngx.ctx.route_to_microservice then
+            local movies_url = "${MOVIES_SERVICE_URL}"
+            ngx.log(ngx.INFO, "[FEATURE-FLAG] Rewrite: redirecting to movies-service at " .. movies_url)
+            
+            -- Парсим URL для получения хоста и порта
+            local scheme_match = movies_url:match("^(https?)://")
+            local rest = movies_url:match("^https?://(.+)")
+            local host, port
+            
+            if rest then
+              local colon_pos = rest:find(":")
+              if colon_pos then
+                host = rest:sub(1, colon_pos - 1)
+                port = tonumber(rest:sub(colon_pos + 1)) or 8081
+              else
+                host = rest
+                port = (scheme_match == "https" and 443 or 8081)
+              end
+            else
+              host = "movies-service"
+              port = 8081
+            end
+            
+            -- В Kong правильный способ изменить upstream в фазе rewrite
+            -- Используем переменные nginx напрямую для изменения upstream
+            -- Переменные upstream_host и upstream_port доступны для изменения в rewrite фазе
+            ngx.var.upstream_host = host
+            ngx.var.upstream_port = tostring(port)
+            ngx.var.upstream_scheme = scheme_match or "http"
+            
+            ngx.log(ngx.INFO, "[FEATURE-FLAG] Upstream changed to " .. scheme_match .. "://" .. host .. ":" .. port)
+          end
 
   # CORS плагин для разрешения кросс-доменных запросов
   - name: cors
