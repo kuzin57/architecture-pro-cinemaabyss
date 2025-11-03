@@ -31,7 +31,7 @@ targets:
 services:
   # Сервис для health check API Gateway (Kong)
   - name: gateway-health-service
-    url: http://127.0.0.1:1
+    url: http://127.0.0.1:8000
     routes:
       # Health check для самого API Gateway
       - name: gateway-health-route
