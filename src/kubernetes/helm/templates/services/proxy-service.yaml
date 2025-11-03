@@ -39,9 +39,9 @@ spec:
         - name: EVENTS_SERVICE_URL
           value: "http://events-service:8082"
         - name: GRADUAL_MIGRATION
-          value: "true"
+          value: {{ .Values.config.gradualMigration }}
         - name: MOVIES_MIGRATION_PERCENT
-          value: "50"
+          value: {{ .Values.config.moviesMigrationPercent }}
         resources:
           limits:
             cpu: "300m"
