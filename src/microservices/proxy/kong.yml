@@ -1,0 +1,201 @@
+_format_version: "3.0"
+_transform: true
+
+# ==========================================
+# Upstreams для балансировки
+# ==========================================
+
+upstreams:
+  # Upstream для балансировки между монолитом и микросервисом фильмов
+  - name: movies-upstream
+
+# ==========================================
+# Targets для upstream
+# ==========================================
+
+targets:
+  # Target для монолита
+  - upstream: movies-upstream
+    target: ${MONOLITH_TARGET}
+    weight: ${MONOLITH_WEIGHT}
+  
+  # Target для микросервиса фильмов
+  - upstream: movies-upstream
+    target: ${MOVIES_TARGET}
+    weight: ${MOVIES_WEIGHT}
+
+# ==========================================
+# Сервисы
+# ==========================================
+
+services:
+  # Сервис для health check API Gateway (Kong)
+  - name: gateway-health-service
+    url: http://127.0.0.1:1
+    routes:
+      # Health check для самого API Gateway
+      - name: gateway-health-route
+        paths:
+          - /health
+        methods:
+          - GET
+        strip_path: false
+
+  # Монолитное приложение
+  - name: monolith-service
+    url: ${MONOLITH_URL}
+    connect_timeout: 60000
+    write_timeout: 60000
+    read_timeout: 60000
+    routes:
+      # Роуты для пользователей
+      - name: users-route
+        paths:
+          - /api/users
+        methods:
+          - GET
+          - POST
+        strip_path: false
+      
+      # Роуты для платежей
+      - name: payments-route
+        paths:
+          - /api/payments
+        methods:
+          - GET
+          - POST
+        strip_path: false
+      
+      # Роуты для подписок
+      - name: subscriptions-route
+        paths:
+          - /api/subscriptions
+        methods:
+          - GET
+          - POST
+        strip_path: false
+
+  # Сервис фильмов с балансировкой между монолитом и микросервисом
+  - name: movies-balance-service
+    connect_timeout: 60000
+    write_timeout: 60000
+    read_timeout: 60000
+    host: movies-upstream
+    protocol: http
+    routes:
+      # Роут для фильмов с балансировкой
+      - name: movies-route
+        paths:
+          - /api/movies
+        methods:
+          - GET
+          - POST
+        strip_path: false
+
+  # Микросервис фильмов (для health check)
+  - name: movies-service
+    url: ${MOVIES_SERVICE_URL}
+    connect_timeout: 60000
+    write_timeout: 60000
+    read_timeout: 60000
+    routes:
+      # Health check для микросервиса фильмов
+      - name: movies-health-route
+        paths:
+          - /api/movies/health
+        methods:
+          - GET
+        strip_path: false
+
+  # Микросервис событий
+  - name: events-service
+    url: ${EVENTS_SERVICE_URL}
+    connect_timeout: 60000
+    write_timeout: 60000
+    read_timeout: 60000
+    routes:
+      # Health check для микросервиса событий
+      - name: events-health-route
+        paths:
+          - /api/events/health
+        methods:
+          - GET
+        strip_path: false
+      
+      # События фильмов
+      - name: movie-events-route
+        paths:
+          - /api/events/movie
+        methods:
+          - POST
+        strip_path: false
+      
+      # События пользователей
+      - name: user-events-route
+        paths:
+          - /api/events/user
+        methods:
+          - POST
+        strip_path: false
+      
+      # События платежей
+      - name: payment-events-route
+        paths:
+          - /api/events/payment
+        methods:
+          - POST
+        strip_path: false
+
+# ==========================================
+# Плагины
+# ==========================================
+
+plugins:
+  # Плагин для health check API Gateway
+  - name: request-termination
+    route: gateway-health-route
+    config:
+      status_code: 200
+      content_type: text/plain
+      body: "API Gateway is healthy"
+
+  # CORS плагин для разрешения кросс-доменных запросов
+  - name: cors
+    config:
+      origins:
+        - "*"
+      methods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+        - OPTIONS
+        - PATCH
+      headers:
+        - Accept
+        - Accept-Version
+        - Content-Length
+        - Content-MD5
+        - Content-Type
+        - Date
+        - Authorization
+        - X-Requested-With
+      exposed_headers:
+        - X-Auth-Token
+      credentials: true
+      max_age: 3600
+      preflight_continue: false
+
+  # Rate limiting для защиты от перегрузки
+  - name: rate-limiting
+    config:
+      minute: 100
+      hour: 1000
+      policy: local
+
+  # Request ID для трейсинга запросов
+  - name: correlation-id
+    config:
+      header_name: "X-Request-ID"
+      generator: "uuid#counter"
+      echo_downstream: true

@@ -57,7 +57,8 @@ services:
       dockerfile: Dockerfile
     container_name: cinemaabyss-monolith
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     ports:
       - "8080:8080"
     environment:
@@ -73,7 +74,8 @@ services:
       dockerfile: Dockerfile
     container_name: cinemaabyss-movies-service
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     ports:
       - "8081:8081"
     environment:
@@ -85,12 +87,16 @@ services:
   # Events Microservice
   events-service:
     build:
-      context: ./src/microservices/events
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./src/microservices/events/Dockerfile
     container_name: cinemaabyss-events-service
     depends_on:
-      - postgres
-      - kafka
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      zookeeper:
+        condition: service_started
     ports:
       - "8082:8082"
     environment:
@@ -108,9 +114,12 @@ services:
     depends_on:
       - monolith
       - movies-service
-      - events-service
+      # - events-service
     ports:
       - "8000:8000"
+      - "8443:8443"
+      - "8001:8001"
+      - "8444:8444"
     environment:
       PORT: 8000
       MONOLITH_URL: http://monolith:8080
