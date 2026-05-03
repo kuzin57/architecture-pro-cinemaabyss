@@ -22,8 +22,8 @@ spec:
     spec:
       containers:
       - name: events-service
-        image: ghcr.io/kuzin57/architecture-pro-cinemaabyss/events-service:latest
-        imagePullPolicy: Always
+        image: gitlab.akhcheck.ru/cinemaabyss/events-service:latest
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8082
         env:
@@ -57,7 +57,7 @@ spec:
           periodSeconds: 20
       restartPolicy: Always
       imagePullSecrets:
-        - name: dockerconfigjson
+        - name: gitlab-registry-pull-secret
 ---
 apiVersion: v1
 kind: Service

@@ -14,9 +14,12 @@ spec:
       labels:
         app: postgres
     spec:
+      imagePullSecrets:
+        - name: gitlab-registry-pull-secret
       containers:
       - name: postgres
-        image: postgres:14
+        image: gitlab.akhcheck.ru/cinemaabyss/postgres:14
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 5432
         env:
@@ -45,8 +48,6 @@ spec:
         volumeMounts:
         - name: postgres-data
           mountPath: /var/lib/postgresql/data
-        - name: postgres-init-scripts
-          mountPath: /docker-entrypoint-initdb.d
         readinessProbe:
           exec:
             command: ["pg_isready", "-U", "postgres"]
@@ -57,10 +58,6 @@ spec:
             command: ["pg_isready", "-U", "postgres"]
           initialDelaySeconds: 30
           periodSeconds: 20
-      volumes:
-      - name: postgres-init-scripts
-        configMap:
-          name: postgres-init-scripts
   volumeClaimTemplates:
   - metadata:
       name: postgres-data

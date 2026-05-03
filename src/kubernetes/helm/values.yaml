@@ -3,9 +3,11 @@ global:
   namespace: cinemaabyss
   domain: cinemaabyss.example.com
 
-# Image pull secrets
+# Учётные данные gitlab.akhcheck.ru для kubernetes.io/dockerconfigjson (замените плейсхолдеры)
 imagePullSecrets:
-  dockerconfigjson: ewoJImF1dGhzIjogewoJCSJnaGNyLmlvIjogewoJCQkiYXV0aCI6ICJhM1Y2YVc0MU56cG5hSEJmZDNoeWNIQlNSVGxXY0UwNE9EVmljblZxVGtGMlpUaFZXRU13TkZOSU0zZHdkVTg1IgoJCX0KCX0KfQ==
+  registry: gitlab.akhcheck.ru
+  username: REPLACE_WITH_GITLAB_USERNAME_OR_DEPLOY_TOKEN_NAME
+  password: REPLACE_WITH_TOKEN_OR_PASSWORD
 # Database configuration
 database:
   host: postgres
@@ -14,8 +16,8 @@ database:
   user: postgres
   password: cG9zdGdyZXNfcGFzc3dvcmQ=
   image:
-    repository: postgres
-    tag: 14
+    repository: gitlab.akhcheck.ru/cinemaabyss/postgres
+    tag: "14"
     pullPolicy: IfNotPresent
   resources:
     limits:
@@ -33,9 +35,9 @@ database:
 monolith:
   enabled: true
   image:
-    repository: ghcr.io/kuzin57/architecture-pro-cinemaabyss/monolith
+    repository: gitlab.akhcheck.ru/cinemaabyss/monolith
     tag: latest
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
   replicas: 1
   resources:
     limits:
@@ -53,9 +55,9 @@ monolith:
 proxyService:
   enabled: true
   image:
-    repository: ghcr.io/kuzin57/architecture-pro-cinemaabyss/proxy-service
+    repository: gitlab.akhcheck.ru/cinemaabyss/proxy-service
     tag: latest
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
   replicas: 1
   resources:
     limits:
@@ -73,9 +75,9 @@ proxyService:
 moviesService:
   enabled: true
   image:
-    repository: ghcr.io/kuzin57/architecture-pro-cinemaabyss/movies-service
+    repository: gitlab.akhcheck.ru/cinemaabyss/movies-service
     tag: latest
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
   replicas: 1
   resources:
     limits:
@@ -93,9 +95,9 @@ moviesService:
 eventsService:
   enabled: true
   image:
-    repository: ghcr.io/kuzin57/architecture-pro-cinemaabyss/events-service
+    repository: gitlab.akhcheck.ru/cinemaabyss/events-service
     tag: latest
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
   replicas: 1
   resources:
     limits:
@@ -113,7 +115,7 @@ eventsService:
 kafka:
   enabled: true
   image:
-    repository: wurstmeister/kafka
+    repository: gitlab.akhcheck.ru/cinemaabyss/kafka
     tag: 2.13-2.7.0
     pullPolicy: IfNotPresent
   replicas: 1
@@ -143,7 +145,7 @@ kafka:
 zookeeper:
   enabled: true
   image:
-    repository: wurstmeister/zookeeper
+    repository: gitlab.akhcheck.ru/cinemaabyss/zookeeper
     tag: latest
     pullPolicy: IfNotPresent
   replicas: 1

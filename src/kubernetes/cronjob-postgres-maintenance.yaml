@@ -1,0 +1,63 @@
+# CronJob обслуживания БД. Поды помечены для мутации Kyverno (mutating admission), см. kyverno/cronjob-pod-mutate-policy.yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-maintenance
+  namespace: cinemaabyss
+  labels:
+    app.kubernetes.io/name: postgres-maintenance-cron
+    app.kubernetes.io/component: database-maintenance
+spec:
+  schedule: "0 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 3600
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: postgres-maintenance-cron
+            app.kubernetes.io/component: database-maintenance
+          annotations:
+            cinemaabyss.akhcheck.ru/kyverno-mutate: "true"
+        spec:
+          restartPolicy: OnFailure
+          # Без установленного Kyverno раскомментируйте imagePullSecrets (политика ниже дублирует их при наличии admission controller)
+          # imagePullSecrets:
+          #   - name: gitlab-registry-pull-secret
+          containers:
+            - name: vacuum-analyze
+              image: gitlab.akhcheck.ru/cinemaabyss/postgres:14
+              imagePullPolicy: IfNotPresent
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  export PGPASSWORD="${DB_PASSWORD}"
+                  psql -h postgres -p 5432 -U "${DB_USER}" -d "${DB_NAME}" -v ON_ERROR_STOP=1 -c "VACUUM ANALYZE;"
+              env:
+                - name: DB_USER
+                  valueFrom:
+                    configMapKeyRef:
+                      name: cinemaabyss-config
+                      key: DB_USER
+                - name: DB_NAME
+                  valueFrom:
+                    configMapKeyRef:
+                      name: cinemaabyss-config
+                      key: DB_NAME
+                - name: DB_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: cinemaabyss-secrets
+                      key: DB_PASSWORD
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  cpu: 200m
+                  memory: 256Mi

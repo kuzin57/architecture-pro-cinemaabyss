@@ -60,7 +60,7 @@ spec:
           periodSeconds: 20
       restartPolicy: Always
       imagePullSecrets:
-        - name: dockerconfigjson
+        - name: gitlab-registry-pull-secret
 ---
 apiVersion: v1
 kind: Service
