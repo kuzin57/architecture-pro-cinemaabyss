@@ -1,12 +1,17 @@
-# Job миграций БД через Flyway. Запускать после готовности Postgres (Rolling/helm hook в CI — по усмотрению).
-# При повторном применении: kubectl delete job flyway-migrate -n cinemaabyss && kubectl apply -f flyway-migrate-job.yaml
+{{- if .Values.flyway.enabled }}
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: flyway-migrate
-  namespace: cinemaabyss
+  namespace: {{ .Values.global.namespace }}
   labels:
+    app.kubernetes.io/name: {{ include "cinemaabyss.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: database-migration
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
   ttlSecondsAfterFinished: 86400
   backoffLimit: 5
@@ -16,18 +21,20 @@ spec:
         app.kubernetes.io/component: database-migration
     spec:
       restartPolicy: OnFailure
-      serviceAccountName: flyway-migrate
+      serviceAccountName: {{ .Values.flyway.serviceAccount.name }}
+      {{- if .Values.imagePullSecrets.enabled }}
       imagePullSecrets:
         - name: ghcr-registry-pull-secret
+      {{- end }}
       initContainers:
         - name: wait-for-postgres
-          image: postgres:14
-          imagePullPolicy: IfNotPresent
+          image: {{ .Values.database.image.repository }}:{{ .Values.database.image.tag }}
+          imagePullPolicy: {{ .Values.database.image.pullPolicy }}
           command:
             - /bin/sh
             - -c
             - |
-              until pg_isready -h postgres -p 5432 -U "${PGUSER}"; do
+              until pg_isready -h {{ .Values.database.host }} -p {{ .Values.database.port }} -U "${PGUSER}"; do
                 echo "waiting for postgres..."; sleep 3;
               done
           env:
@@ -43,8 +50,8 @@ spec:
                   key: DB_PASSWORD
       containers:
         - name: flyway
-          image: flyway/flyway:10-alpine
-          imagePullPolicy: IfNotPresent
+          image: {{ .Values.flyway.image.repository }}:{{ .Values.flyway.image.tag }}
+          imagePullPolicy: {{ .Values.flyway.image.pullPolicy }}
           args:
             - migrate
           env:
@@ -80,19 +87,15 @@ spec:
             - name: FLYWAY_VALIDATE_ON_MIGRATE
               value: "true"
             - name: FLYWAY_CONNECT_RETRIES
-              value: "30"
+              value: "{{ .Values.flyway.connectRetries }}"
           volumeMounts:
             - name: flyway-sql
               mountPath: /flyway/sql
               readOnly: true
           resources:
-            requests:
-              cpu: 100m
-              memory: 256Mi
-            limits:
-              cpu: 500m
-              memory: 512Mi
+            {{- toYaml .Values.flyway.resources | nindent 12 }}
       volumes:
         - name: flyway-sql
           configMap:
             name: flyway-migrations
+{{- end }}

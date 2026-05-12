@@ -18,8 +18,10 @@ spec:
       labels:
         app: postgres
     spec:
+      {{- if .Values.imagePullSecrets.enabled }}
       imagePullSecrets:
-        - name: gitlab-registry-pull-secret
+        - name: ghcr-registry-pull-secret
+      {{- end }}
       containers:
       - name: postgres
         image: {{ .Values.database.image.repository }}:{{ .Values.database.image.tag }}
@@ -42,6 +44,8 @@ spec:
             configMapKeyRef:
               name: cinemaabyss-config
               key: DB_NAME
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
         resources:
           {{- toYaml .Values.database.resources | nindent 10 }}
         volumeMounts:
@@ -81,6 +85,7 @@ metadata:
     app.kubernetes.io/name: {{ include "cinemaabyss.name" . }}
     app.kubernetes.io/instance: {{ .Release.Name }}
 spec:
+  clusterIP: None
   selector:
     app: postgres
   ports:

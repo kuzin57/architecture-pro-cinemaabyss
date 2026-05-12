@@ -25,8 +25,8 @@ spec:
     spec:
       containers:
       - name: events-service
-        image: ghcr.io/kuzin57/architecture-pro-cinemaabyss/events-service:latest
-        imagePullPolicy: Always
+        image: {{ .Values.eventsService.image.repository }}:{{ .Values.eventsService.image.tag }}
+        imagePullPolicy: {{ .Values.eventsService.image.pullPolicy }}
         ports:
         - containerPort: 8082
         env:
@@ -59,8 +59,10 @@ spec:
           initialDelaySeconds: 15
           periodSeconds: 20
       restartPolicy: Always
+      {{- if .Values.imagePullSecrets.enabled }}
       imagePullSecrets:
-        - name: gitlab-registry-pull-secret
+        - name: ghcr-registry-pull-secret
+      {{- end }}
 ---
 apiVersion: v1
 kind: Service

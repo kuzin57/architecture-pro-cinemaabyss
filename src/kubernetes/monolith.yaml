@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
       - name: monolith
-        image: gitlab.akhcheck.ru/cinemaabyss/monolith:latest
+        image: ghcr.io/kuzin57/architecture-pro-cinemaabyss/monolith:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8080
@@ -57,7 +57,7 @@ spec:
           periodSeconds: 20
       restartPolicy: Always
       imagePullSecrets:
-        - name: gitlab-registry-pull-secret
+        - name: ghcr-registry-pull-secret
 ---
 apiVersion: v1
 kind: Service

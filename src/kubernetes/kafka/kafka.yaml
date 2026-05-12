@@ -46,10 +46,10 @@ spec:
         app: zookeeper
     spec:
       imagePullSecrets:
-        - name: gitlab-registry-pull-secret
+        - name: ghcr-registry-pull-secret
       containers:
       - name: zookeeper
-        image: gitlab.akhcheck.ru/cinemaabyss/zookeeper:latest
+        image: wurstmeister/zookeeper:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 2181
@@ -131,10 +131,10 @@ spec:
         app: kafka
     spec:
       imagePullSecrets:
-        - name: gitlab-registry-pull-secret
+        - name: ghcr-registry-pull-secret
       containers:
       - name: kafka
-        image: gitlab.akhcheck.ru/cinemaabyss/kafka:2.13-2.7.0
+        image: wurstmeister/kafka:2.13-2.7.0
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 9092

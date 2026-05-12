@@ -58,8 +58,10 @@ spec:
       labels:
         app: zookeeper
     spec:
+      {{- if .Values.imagePullSecrets.enabled }}
       imagePullSecrets:
-        - name: gitlab-registry-pull-secret
+        - name: ghcr-registry-pull-secret
+      {{- end }}
       containers:
       - name: zookeeper
         image: {{ .Values.zookeeper.image.repository }}:{{ .Values.zookeeper.image.tag }}
@@ -156,8 +158,10 @@ spec:
       labels:
         app: kafka
     spec:
+      {{- if .Values.imagePullSecrets.enabled }}
       imagePullSecrets:
-        - name: gitlab-registry-pull-secret
+        - name: ghcr-registry-pull-secret
+      {{- end }}
       containers:
       - name: kafka
         image: {{ .Values.kafka.image.repository }}:{{ .Values.kafka.image.tag }}

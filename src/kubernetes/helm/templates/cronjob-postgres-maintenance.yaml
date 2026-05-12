@@ -1,14 +1,15 @@
-# CronJob обслуживания БД. Поды помечены для мутации Kyverno (mutating admission), см. kyverno/cronjob-pod-mutate-policy.yaml
+{{- if .Values.maintenanceCron.enabled }}
 apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: postgres-maintenance
-  namespace: cinemaabyss
+  namespace: {{ .Values.global.namespace }}
   labels:
     app.kubernetes.io/name: postgres-maintenance-cron
+    app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: database-maintenance
 spec:
-  schedule: "0 3 * * *"
+  schedule: "{{ .Values.maintenanceCron.schedule }}"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 2
   failedJobsHistoryLimit: 3
@@ -25,19 +26,20 @@ spec:
             cinemaabyss.akhcheck.ru/kyverno-mutate: "true"
         spec:
           restartPolicy: OnFailure
-          # Без установленного Kyverno раскомментируйте imagePullSecrets (политика ниже дублирует их при наличии admission controller)
-          # imagePullSecrets:
-          #   - name: ghcr-registry-pull-secret
+          {{- if and (not .Values.kyverno.enabled) .Values.imagePullSecrets.enabled }}
+          imagePullSecrets:
+            - name: ghcr-registry-pull-secret
+          {{- end }}
           containers:
-            - name: vacuum-analyze
-              image: postgres:14
-              imagePullPolicy: IfNotPresent
+            - name: vacuum-analyze 
+              image: {{ .Values.database.image.repository }}:{{ .Values.database.image.tag }}
+              imagePullPolicy: {{ .Values.database.image.pullPolicy }}
               command:
                 - /bin/sh
                 - -c
                 - |
                   export PGPASSWORD="${DB_PASSWORD}"
-                  psql -h postgres -p 5432 -U "${DB_USER}" -d "${DB_NAME}" -v ON_ERROR_STOP=1 -c "VACUUM ANALYZE;"
+                  psql -h {{ .Values.database.host }} -p {{ .Values.database.port }} -U "${DB_USER}" -d "${DB_NAME}" -v ON_ERROR_STOP=1 -c "VACUUM ANALYZE;"
               env:
                 - name: DB_USER
                   valueFrom:
@@ -55,9 +57,5 @@ spec:
                       name: cinemaabyss-secrets
                       key: DB_PASSWORD
               resources:
-                requests:
-                  cpu: 50m
-                  memory: 128Mi
-                limits:
-                  cpu: 200m
-                  memory: 256Mi
+                {{- toYaml .Values.maintenanceCron.resources | nindent 16 }}
+{{- end }}
