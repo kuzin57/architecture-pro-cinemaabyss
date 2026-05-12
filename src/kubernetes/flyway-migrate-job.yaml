@@ -1,0 +1,98 @@
+# Job миграций БД через Flyway. Запускать после готовности Postgres (Rolling/helm hook в CI — по усмотрению).
+# При повторном применении: kubectl delete job flyway-migrate -n cinemaabyss && kubectl apply -f flyway-migrate-job.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: flyway-migrate
+  namespace: cinemaabyss
+  labels:
+    app.kubernetes.io/component: database-migration
+spec:
+  ttlSecondsAfterFinished: 86400
+  backoffLimit: 5
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: database-migration
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: flyway-migrate
+      imagePullSecrets:
+        - name: ghcr-registry-pull-secret
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:14
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -c
+            - |
+              until pg_isready -h postgres -p 5432 -U "${PGUSER}"; do
+                echo "waiting for postgres..."; sleep 3;
+              done
+          env:
+            - name: PGUSER
+              valueFrom:
+                configMapKeyRef:
+                  name: cinemaabyss-config
+                  key: DB_USER
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: cinemaabyss-secrets
+                  key: DB_PASSWORD
+      containers:
+        - name: flyway
+          image: flyway/flyway:10-alpine
+          imagePullPolicy: IfNotPresent
+          args:
+            - migrate
+          env:
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: cinemaabyss-config
+                  key: DB_HOST
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: cinemaabyss-config
+                  key: DB_PORT
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: cinemaabyss-config
+                  key: DB_NAME
+            - name: FLYWAY_URL
+              value: jdbc:postgresql://$(DB_HOST):$(DB_PORT)/$(DB_NAME)
+            - name: FLYWAY_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: cinemaabyss-config
+                  key: DB_USER
+            - name: FLYWAY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: cinemaabyss-secrets
+                  key: DB_PASSWORD
+            - name: FLYWAY_LOCATIONS
+              value: filesystem:/flyway/sql
+            - name: FLYWAY_VALIDATE_ON_MIGRATE
+              value: "true"
+            - name: FLYWAY_CONNECT_RETRIES
+              value: "30"
+          volumeMounts:
+            - name: flyway-sql
+              mountPath: /flyway/sql
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: flyway-sql
+          configMap:
+            name: flyway-migrations

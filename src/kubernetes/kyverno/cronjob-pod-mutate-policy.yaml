@@ -1,0 +1,43 @@
+# Требуется Kyverno в кластере: https://kyverno.io/docs/installation/
+# Устанавливает mutating admission policy для Pod'ов CronJob postgres-maintenance (метка/аннотация).
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: cinemaabyss-mutate-maintenance-cronjob-pods
+spec:
+  rules:
+    - name: inject-gitlab-pull-secret-for-maintenance
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - cinemaabyss
+              selector:
+                matchExpressions:
+                  - key: app.kubernetes.io/name
+                    operator: In
+                    values:
+                      - postgres-maintenance-cron
+      mutate:
+        patchStrategicMerge:
+          spec:
+            imagePullSecrets:
+              - name: ghcr-registry-pull-secret
+    - name: stamp-mutated-label
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - cinemaabyss
+              selector:
+                matchLabels:
+                  app.kubernetes.io/component: database-maintenance
+      mutate:
+        patchStrategicMerge:
+          metadata:
+            labels:
+              cinemaabyss.akhcheck.ru/admission-mutated: "kyverno"

@@ -1,0 +1,23 @@
+{{- if .Values.flyway.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flyway-migrations
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app.kubernetes.io/name: {{ include "cinemaabyss.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: database-migration
+data:
+  V1__cinemaabyss_baseline.sql: |
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+    CREATE TABLE IF NOT EXISTS schema_meta (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+
+    INSERT INTO schema_meta (key, value) VALUES ('managed_by', 'flyway')
+    ON CONFLICT (key) DO NOTHING;
+{{- end }}

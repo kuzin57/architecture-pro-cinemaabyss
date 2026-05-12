@@ -1,0 +1,61 @@
+{{- if .Values.maintenanceCron.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-maintenance
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app.kubernetes.io/name: postgres-maintenance-cron
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: database-maintenance
+spec:
+  schedule: "{{ .Values.maintenanceCron.schedule }}"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 3600
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: postgres-maintenance-cron
+            app.kubernetes.io/component: database-maintenance
+          annotations:
+            cinemaabyss.akhcheck.ru/kyverno-mutate: "true"
+        spec:
+          restartPolicy: OnFailure
+          {{- if and (not .Values.kyverno.enabled) .Values.imagePullSecrets.enabled }}
+          imagePullSecrets:
+            - name: ghcr-registry-pull-secret
+          {{- end }}
+          containers:
+            - name: vacuum-analyze 
+              image: {{ .Values.database.image.repository }}:{{ .Values.database.image.tag }}
+              imagePullPolicy: {{ .Values.database.image.pullPolicy }}
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  export PGPASSWORD="${DB_PASSWORD}"
+                  psql -h {{ .Values.database.host }} -p {{ .Values.database.port }} -U "${DB_USER}" -d "${DB_NAME}" -v ON_ERROR_STOP=1 -c "VACUUM ANALYZE;"
+              env:
+                - name: DB_USER
+                  valueFrom:
+                    configMapKeyRef:
+                      name: cinemaabyss-config
+                      key: DB_USER
+                - name: DB_NAME
+                  valueFrom:
+                    configMapKeyRef:
+                      name: cinemaabyss-config
+                      key: DB_NAME
+                - name: DB_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: cinemaabyss-secrets
+                      key: DB_PASSWORD
+              resources:
+                {{- toYaml .Values.maintenanceCron.resources | nindent 16 }}
+{{- end }}

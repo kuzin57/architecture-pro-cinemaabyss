@@ -1,0 +1,101 @@
+{{- if .Values.flyway.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: flyway-migrate
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app.kubernetes.io/name: {{ include "cinemaabyss.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: database-migration
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  ttlSecondsAfterFinished: 86400
+  backoffLimit: 5
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: database-migration
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: {{ .Values.flyway.serviceAccount.name }}
+      {{- if .Values.imagePullSecrets.enabled }}
+      imagePullSecrets:
+        - name: ghcr-registry-pull-secret
+      {{- end }}
+      initContainers:
+        - name: wait-for-postgres
+          image: {{ .Values.database.image.repository }}:{{ .Values.database.image.tag }}
+          imagePullPolicy: {{ .Values.database.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              until pg_isready -h {{ .Values.database.host }} -p {{ .Values.database.port }} -U "${PGUSER}"; do
+                echo "waiting for postgres..."; sleep 3;
+              done
+          env:
+            - name: PGUSER
+              valueFrom:
+                configMapKeyRef:
+                  name: cinemaabyss-config
+                  key: DB_USER
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: cinemaabyss-secrets
+                  key: DB_PASSWORD
+      containers:
+        - name: flyway
+          image: {{ .Values.flyway.image.repository }}:{{ .Values.flyway.image.tag }}
+          imagePullPolicy: {{ .Values.flyway.image.pullPolicy }}
+          args:
+            - migrate
+          env:
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: cinemaabyss-config
+                  key: DB_HOST
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: cinemaabyss-config
+                  key: DB_PORT
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: cinemaabyss-config
+                  key: DB_NAME
+            - name: FLYWAY_URL
+              value: jdbc:postgresql://$(DB_HOST):$(DB_PORT)/$(DB_NAME)
+            - name: FLYWAY_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: cinemaabyss-config
+                  key: DB_USER
+            - name: FLYWAY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: cinemaabyss-secrets
+                  key: DB_PASSWORD
+            - name: FLYWAY_LOCATIONS
+              value: filesystem:/flyway/sql
+            - name: FLYWAY_VALIDATE_ON_MIGRATE
+              value: "true"
+            - name: FLYWAY_CONNECT_RETRIES
+              value: "{{ .Values.flyway.connectRetries }}"
+          volumeMounts:
+            - name: flyway-sql
+              mountPath: /flyway/sql
+              readOnly: true
+          resources:
+            {{- toYaml .Values.flyway.resources | nindent 12 }}
+      volumes:
+        - name: flyway-sql
+          configMap:
+            name: flyway-migrations
+{{- end }}

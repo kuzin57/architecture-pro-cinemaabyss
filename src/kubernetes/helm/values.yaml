@@ -3,9 +3,12 @@ global:
   namespace: cinemaabyss
   domain: cinemaabyss.example.com
 
-# Image pull secrets
+# Учётные данные ghcr.io для kubernetes.io/dockerconfigjson (замените плейсхолдеры)
 imagePullSecrets:
-  dockerconfigjson: ewoJImF1dGhzIjogewoJCSJnaGNyLmlvIjogewoJCQkiYXV0aCI6ICJhM1Y2YVc0MU56cG5hSEJmZDNoeWNIQlNSVGxXY0UwNE9EVmljblZxVGtGMlpUaFZXRU13TkZOSU0zZHdkVTg1IgoJCX0KCX0KfQ==
+  enabled: false
+  registry: ghcr.io
+  username: REPLACE_WITH_GITHUB_USERNAME_OR_DEPLOY_TOKEN_NAME
+  password: REPLACE_WITH_TOKEN_OR_PASSWORD
 # Database configuration
 database:
   host: postgres
@@ -15,7 +18,7 @@ database:
   password: cG9zdGdyZXNfcGFzc3dvcmQ=
   image:
     repository: postgres
-    tag: 14
+    tag: "14"
     pullPolicy: IfNotPresent
   resources:
     limits:
@@ -35,7 +38,7 @@ monolith:
   image:
     repository: ghcr.io/kuzin57/architecture-pro-cinemaabyss/monolith
     tag: latest
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
   replicas: 1
   resources:
     limits:
@@ -55,7 +58,7 @@ proxyService:
   image:
     repository: ghcr.io/kuzin57/architecture-pro-cinemaabyss/proxy-service
     tag: latest
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
   replicas: 1
   resources:
     limits:
@@ -75,7 +78,7 @@ moviesService:
   image:
     repository: ghcr.io/kuzin57/architecture-pro-cinemaabyss/movies-service
     tag: latest
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
   replicas: 1
   resources:
     limits:
@@ -95,7 +98,7 @@ eventsService:
   image:
     repository: ghcr.io/kuzin57/architecture-pro-cinemaabyss/events-service
     tag: latest
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
   replicas: 1
   resources:
     limits:
@@ -158,6 +161,39 @@ zookeeper:
     enabled: true
     size: 1Gi
     accessMode: ReadWriteOnce
+
+# Flyway database migrations
+flyway:
+  enabled: true
+  image:
+    repository: flyway/flyway
+    tag: 10-alpine
+    pullPolicy: IfNotPresent
+  serviceAccount:
+    name: flyway-migrate
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  connectRetries: 30
+
+# Database maintenance CronJob. Enable kyverno below only when Kyverno CRDs are installed in the cluster.
+maintenanceCron:
+  enabled: true
+  schedule: "0 3 * * *"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+kyverno:
+  enabled: false
 
 # Ingress configuration
 ingress:

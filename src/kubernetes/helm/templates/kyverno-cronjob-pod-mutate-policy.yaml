@@ -1,0 +1,40 @@
+{{- if and .Values.maintenanceCron.enabled .Values.kyverno.enabled .Values.imagePullSecrets.enabled }}
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: cinemaabyss-mutate-maintenance-cronjob-pods
+spec:
+  rules:
+    - name: inject-gitlab-pull-secret-for-maintenance
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - {{ .Values.global.namespace }}
+              selector:
+                matchLabels:
+                  app.kubernetes.io/name: postgres-maintenance-cron
+      mutate:
+        patchStrategicMerge:
+          spec:
+            imagePullSecrets:
+              - name: ghcr-registry-pull-secret
+    - name: stamp-mutated-label
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - {{ .Values.global.namespace }}
+              selector:
+                matchLabels:
+                  app.kubernetes.io/component: database-maintenance
+      mutate:
+        patchStrategicMerge:
+          metadata:
+            labels:
+              cinemaabyss.akhcheck.ru/admission-mutated: "kyverno"
+{{- end }}
